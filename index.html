@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preflop Charts</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Preflop Charts</h1>
+            <span class="subtitle">9-Max NLH</span>
+        </header>
+
+        <div class="main-layout">
+            <!-- Sidebar: Chart Navigation -->
+            <nav class="sidebar">
+                <div class="section" id="rfi-section">
+                    <h3 class="section-title" data-section="rfi">Raise First In (RFI)</h3>
+                    <ul class="chart-list" id="rfi-list"></ul>
+                </div>
+                <div class="section" id="facing-rfi-section">
+                    <h3 class="section-title" data-section="facing-rfi">Facing RFI</h3>
+                    <ul class="chart-list" id="facing-rfi-list"></ul>
+                </div>
+                <div class="section" id="vs-3bet-section">
+                    <h3 class="section-title" data-section="vs-3bet">RFI vs 3-Bet</h3>
+                    <ul class="chart-list" id="vs-3bet-list"></ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="content">
+                <!-- Legend -->
+                <div class="legend" id="legend"></div>
+
+                <!-- Current Chart Info -->
+                <div class="chart-header">
+                    <h2 id="chartTitle">Select a chart from the sidebar</h2>
+                    <p id="chartDescription" class="chart-desc"></p>
+                </div>
+
+                <!-- Hand Grid -->
+                <div class="grid-container">
+                    <table class="hand-grid" id="handGrid"></table>
+                </div>
+
+                <!-- Stats -->
+                <div class="chart-stats" id="chartStats"></div>
+            </main>
+        </div>
+    </div>
+
+    <script src="charts.js"></script>
+    <script src="preset-data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
