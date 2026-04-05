@@ -196,6 +196,23 @@ body {
     background: rgb(90, 185, 102);
 }
 
+.grid-cell.raise-bluff {
+    background: rgb(255, 138, 128);
+    color: #000;
+    text-shadow: none;
+}
+
+.grid-cell.limp {
+    background: rgb(52, 152, 219);
+}
+
+.grid-cell.unreachable {
+    background: rgb(25, 25, 25);
+    color: rgba(255, 255, 255, 0.15);
+    text-shadow: none;
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
 .grid-cell.empty {
     background: rgb(40, 40, 40);
     color: rgba(255, 255, 255, 0.25);

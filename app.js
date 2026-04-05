@@ -571,6 +571,7 @@ function renderGrid() {
     const chartId = state.selectedChartId;
     const data = chartId ? getChartData(chartId) : {};
     const hasData = chartId && Object.keys(data).length > 0;
+    const unreachable = getUnreachableHandsAdvanced();
 
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const hand = cell.dataset.hand;
@@ -581,17 +582,21 @@ function renderGrid() {
 
         // Reset classes
         cell.className = 'grid-cell';
+        cell.style.background = '';
 
         if (!hasData) {
             cell.classList.add('empty');
-            cell.style.background = '';
+            return;
+        }
+
+        if (unreachable.has(hand)) {
+            cell.classList.add('unreachable');
             return;
         }
 
         const entry = data[hand];
         if (!entry) {
             cell.classList.add('fold');
-            cell.style.background = '';
             return;
         }
 
@@ -617,32 +622,107 @@ function renderSimplifiedGrid() {
     const data = chartId ? (PRESET_DATA[chartId] || {}) : {};
     const hasData = Object.keys(data).length > 0;
 
+    // Get unreachable hands for vs 3-Bet / vs. RFI with prior action
+    const unreachable = getUnreachableHands();
+
     document.querySelectorAll('.grid-cell').forEach(cell => {
         const hand = cell.dataset.hand;
         const oldBg = cell.querySelector('.cell-bg');
         if (oldBg) oldBg.remove();
 
         cell.className = 'grid-cell';
+        cell.style.background = '';
 
         if (!hasData) {
             cell.classList.add('empty');
-            cell.style.background = '';
+            return;
+        }
+
+        // Check if hand is unreachable (would never be in this spot)
+        if (unreachable.has(hand)) {
+            cell.classList.add('unreachable');
             return;
         }
 
         const action = data[hand] || 'fold';
 
-        // Map simplified actions to colors
-        if (action.includes('raise') || action.includes('threebet') || action.includes('fourbet')) {
+        // Distinguish value vs bluff raises
+        if (action.includes('_value') || action === 'raise') {
             cell.classList.add('raise');
+        } else if (action.includes('_bluff')) {
+            cell.classList.add('raise-bluff');
         } else if (action === 'call') {
             cell.classList.add('call');
         } else if (action === 'limp') {
-            cell.classList.add('call'); // limp shows as green
+            cell.classList.add('limp');
         } else {
             cell.classList.add('fold');
         }
     });
+}
+
+function getUnreachableHands() {
+    const unreachable = new Set();
+
+    if (!state.heroSeat || !state.action) return unreachable;
+
+    // For "vs. 3-Bet" in simplified: hero opened, so hands hero wouldn't open are unreachable
+    if (state.action === 'vs. 3-Bet') {
+        const heroRfiId = `rfi_${state.heroSeat.toLowerCase().replace('+', 'p')}`;
+        const rfiData = PRESET_DATA[heroRfiId];
+        if (rfiData) {
+            HAND_GRID.flat().forEach(hand => {
+                const rfiAction = rfiData[hand] || 'fold';
+                if (rfiAction === 'fold') {
+                    unreachable.add(hand);
+                }
+            });
+        }
+    }
+
+    // For "vs. RFI" in simplified: all hands are reachable (hero hasn't acted)
+    // For "RFI": all hands reachable
+
+    return unreachable;
+}
+
+function getUnreachableHandsAdvanced() {
+    const unreachable = new Set();
+
+    if (!state.heroSeat || !state.action) return unreachable;
+
+    // For vs. 3-Bet and vs. 4-Bet: hero opened or 3-bet, so look up what hero would have
+    if (state.action === 'vs. 3-Bet' || state.action === 'vs. 4-Bet') {
+        // Find the hero's RFI chart for this position/stack/format
+        const tableType = getTableTypeForState();
+        const gf = getGameFormatForState();
+        const rfiChart = getCharts().find(c =>
+            c.gameFormat === gf &&
+            c.tableType === tableType &&
+            c.bbs === state.stackSize &&
+            c.heroPosition === state.heroSeat &&
+            c.action === 'Folded To'
+        );
+
+        if (rfiChart) {
+            const rfiData = getChartData(rfiChart.id);
+            HAND_GRID.flat().forEach(hand => {
+                const entry = rfiData[hand];
+                if (!entry) {
+                    unreachable.add(hand);
+                } else {
+                    const freqs = entry.frequencies || {};
+                    const raisePct = getRaisePct(freqs);
+                    // If hero never raises this hand, it's unreachable
+                    if (raisePct === 0) {
+                        unreachable.add(hand);
+                    }
+                }
+            });
+        }
+    }
+
+    return unreachable;
 }
 
 function renderMixedCell(cell, raisePct, callPct, foldPct) {
@@ -819,12 +899,14 @@ function updateSimplifiedStats(statsBar, progressBar) {
         return;
     }
 
-    const totalCombos = 1326;
-    let raiseCombos = 0, callCombos = 0, foldCombos = 0;
+    const unreachable = getUnreachableHands();
+    let raiseCombos = 0, callCombos = 0, foldCombos = 0, totalCombos = 0;
 
     HAND_GRID.flat().forEach(hand => {
-        const action = data[hand] || 'fold';
         const combos = getHandCombos(hand);
+        if (unreachable.has(hand)) return; // skip unreachable
+        totalCombos += combos;
+        const action = data[hand] || 'fold';
         if (action.includes('raise') || action.includes('threebet') || action.includes('fourbet')) {
             raiseCombos += combos;
         } else if (action === 'call' || action === 'limp') {
@@ -833,6 +915,8 @@ function updateSimplifiedStats(statsBar, progressBar) {
             foldCombos += combos;
         }
     });
+
+    if (totalCombos === 0) totalCombos = 1326;
 
     const rPct = (raiseCombos / totalCombos * 100).toFixed(1);
     const cPct = (callCombos / totalCombos * 100).toFixed(1);
@@ -925,8 +1009,7 @@ function showTooltip(cell, hand) {
 
 function showSimplifiedTooltip(cell, hand) {
     const data = PRESET_DATA[state.selectedChartId] || {};
-    const action = data[hand] || 'fold';
-    const actionLabel = ACTIONS[action]?.label || 'Fold';
+    const unreachable = getUnreachableHands();
     const combos = getHandCombos(hand);
     const type = hand.length === 2 ? 'Pair' : hand.endsWith('s') ? 'Suited' : 'Offsuit';
 
@@ -936,11 +1019,21 @@ function showSimplifiedTooltip(cell, hand) {
         document.body.appendChild(tooltipEl);
     }
 
-    tooltipEl.innerHTML = `
-        <div class="tt-hand">${hand}</div>
-        <div class="tt-type">${type} &middot; ${combos} combos</div>
-        <div>${actionLabel}</div>
-    `;
+    if (unreachable.has(hand)) {
+        tooltipEl.innerHTML = `
+            <div class="tt-hand">${hand}</div>
+            <div class="tt-type">${type} &middot; ${combos} combos</div>
+            <div style="color:#555">Not in range</div>
+        `;
+    } else {
+        const action = data[hand] || 'fold';
+        const actionLabel = ACTIONS[action]?.label || 'Fold';
+        tooltipEl.innerHTML = `
+            <div class="tt-hand">${hand}</div>
+            <div class="tt-type">${type} &middot; ${combos} combos</div>
+            <div>${actionLabel}</div>
+        `;
+    }
 
     tooltipEl.style.display = 'block';
     const rect = cell.getBoundingClientRect();
